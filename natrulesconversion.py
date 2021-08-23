@@ -185,13 +185,14 @@ def authenticate():
     
 def main():
     cred = authenticate()
-    natRules = api_post(cred, "show-nat-rulebase", {"details-level":"standard","use-object-dictionary": True,"package":"HomePolicy"})
+    policyPackage = input("Input Policy Name: ")
+    natRules = api_post(cred, "show-nat-rulebase", {"details-level":"standard","limit":500,"use-object-dictionary": True,"package":policyPackage})
     lookup = natRules[0]["objects-dictionary"]
     print()
     for element in natRules[0]["rulebase"]:
         for rule in element["rulebase"]:
             try:    
-                print("Rule Number: "+str(rule["rule-number"]), end=' ')
+                print("Rule Number: "+str(rule["rule-number"]), end='\t')
             except:
                 pass
             
@@ -199,12 +200,47 @@ def main():
             
             for key in keyList:
                 try:
+                    #print for hosts
                     if next(item for item in lookup if item["uid"] == str(rule[key]))["type"] == "host":
-                        print("| "+key+": "+next(item for item in lookup if item["uid"] == str(rule[key]))["ipv4-address"], end="\t")
+                        #if the key contains the word original just print that ipaddress
+                        if "original" in key:
+                            print("| "+key+": "+next(item for item in lookup if item["uid"] == str(rule[key]))["ipv4-address"], end="\t")
+                        #for translated ip address
+                        else:
+                            natObject = api_post(cred, "show-host", {"uid":next(item for item in lookup if item["uid"] == str(rule[key]))["uid"]})
+                            #if objects does not have auto NAT rules print orginal IP address
+                            if natObject[0]["nat-settings"]["auto-rule"] == False:
+                                print("| "+key+": "+next(item for item in lookup if item["uid"] == str(rule[key]))["ipv4-address"], end="\t")
+                            #if object has auto nat rules print where the object is natted behind
+                            else:
+                                try:
+                                    print("| "+key+": "+natObject[0]["nat-settings"]["ipv4-address"], end="\t")
+                                except:
+                                    print("| "+key+": "+next(item for item in lookup if item["uid"] == str(rule[key]))["ipv4-address"], end="\t")
+                                
+                    #print for networks
                     elif next(item for item in lookup if item["uid"] == str(rule[key]))["type"] == "network":
-                        print("| "+key+": "+next(item for item in lookup if item["uid"] == str(rule[key]))["subnet4"], end="\t")
+                        #if the key contains the word original just print that ipaddress
+                        if "original" in key: 
+                            print("| "+key+": "+next(item for item in lookup if item["uid"] == str(rule[key]))["subnet4"], end="\t")
+                        #for translated ip address
+                        else:
+                            natObject = api_post(cred, "show-network", {"uid":next(item for item in lookup if item["uid"] == str(rule[key]))["uid"]})
+                            #if objects does not have auto NAT rules print orginal IP address
+                            if natObject[0]["nat-settings"]["auto-rule"] == False:
+                                print("| "+key+": "+next(item for item in lookup if item["uid"] == str(rule[key]))["subnet4"], end="\t")
+                            #if object has auto nat rules print where the object is natted behind
+                            else:
+                                try:
+                                    print("| "+key+": "+natObject[0]["nat-settings"]["ipv4-address"], end="\t")
+                                except:
+                                    print("| "+key+": "+next(item for item in lookup if item["uid"] == str(rule[key]))["subnet4"], end="\t")
+                            
+                    #print any for the cpmi any object
                     elif next(item for item in lookup if item["uid"] == str(rule[key]))["type"] == "CpmiAnyObject":
                         print("| "+key+": Any     ", end="\t")
+                        
+                    #just print the name of the object if it is not a host, network or any object
                     else:
                         print("| "+key+": "+next(item for item in lookup if item["uid"] == str(rule[key]))["name"], end="    \t")
                 except Exception as e:
